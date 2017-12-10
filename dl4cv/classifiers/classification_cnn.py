@@ -53,6 +53,46 @@ class ClassificationCNN(nn.Module):
         # will not coincide with the Jupyter notebook cell.                    #
         ########################################################################
 
+        # Layer 1 Conf
+        # Padding => Same
+        conv_padding = (kernel_size - 1) // 2
+        conv_out = (num_filters, ((width + 2 * conv_padding - kernel_size) // stride_conv) + 1), (((height + 2 * conv_padding - kernel_size) // stride_conv) + 1)
+
+        # Layer 3 Pool
+        pool_out = (conv_out[0], (conv_out[1] - pool) // stride_pool + 1, (conv_out[2] - pool) // stride_pool + 1)
+
+        # Layer 4 Fully Connected
+        fc1_dim = ((pool_out[0] * pool_out[1] * pool_out[2]), hidden_dim)
+
+        # Layer 7 Fully Connected
+        fc2_dim = (hidden_dim, num_classes)
+
+        # conv - relu - 2x2 max pool - fc - dropout - relu - fc
+        self.features = nn.Sequential(
+            nn.Conv2d(channels, num_filters, kernel_size, stride_conv, conv_padding),
+            nn.ReLU(),
+            nn.MaxPool2d(pool, stride_pool)
+        )
+
+        self.classifier = nn.Sequential(
+            nn.Linear(fc1_dim[0], fc1_dim[1]),
+            nn.Dropout(dropout),
+            nn.ReLU(),
+            nn.Linear(fc2_dim[0], fc2_dim[1])
+        )
+
+        # initialize and scale layers
+        # get weights of first conv layer
+        conv_layer = self.features.children().__next__()
+        conv_layer.weight.data *= weight_scale
+
+        # fc layers
+        classifier_layers = list(self.classifier.children())
+        fc_1 = classifier_layers[0]
+        fc_2 = classifier_layers[3]
+        fc_1.weight.data *= weight_scale
+        fc_2.weight.data *= weight_scale
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
