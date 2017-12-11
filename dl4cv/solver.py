@@ -74,17 +74,17 @@ class Solver(object):
         Make a single gradient update. This is called by train() and should not
         be called manually.
         """
+        self.optim.zero_grad()
 
         # Compute loss and gradient
         output = model(input_var)
         loss = self.loss_func(output, target_var)
 
         # preform training step
-        self.optim.zero_grad()
         loss.backward()
         self.optim.step()
 
-        self.loss_history.append(loss)
+        self.loss_history.append(loss.data[0])
 
     def train(self, model, train_loader, val_loader, num_epochs=10, log_nth=0):
         """
@@ -134,6 +134,7 @@ class Solver(object):
 
         for epoch in range(num_epochs):
             for t, (input_var, target_var) in enumerate(train_loader, 1):
+                input_var, target_var = Variable(input_var), Variable(target_var)
                 self._step(model, input_var, target_var)
 
                 # At the end of every epoch, increment the epoch counter and decay the
@@ -149,9 +150,21 @@ class Solver(object):
                 if first_it or last_it or epoch_end:
                     train_acc = self.accuracy(model, input_var, target_var)
 
-                    data_iter = iter(val_loader)
-                    input_val_var, target_val_var = data_iter.next()
-                    val_acc = self.accuracy(model, input_val_var, target_val_var)
+                    # Compute average valid loss / accuracy
+                    avg_val_loss = []
+                    avg_val_acc = []
+                    for input_val_var, target_val_var in val_loader:
+                        input_val_var, target_val_var = Variable(input_val_var), Variable(target_val_var)
+                        avg_val_acc.append(self.accuracy(model, input_val_var, target_val_var))
+
+                        # get valid loss
+                        output = model(input_val_var)
+                        val_loss = self.loss_func(output, target_val_var).data[0]
+                        avg_val_loss.append(val_loss)
+
+                    val_loss = sum(avg_val_loss) / len(avg_val_loss)
+                    val_acc = sum(avg_val_acc) / len(avg_val_acc)
+                    self.val_loss_history.append(val_loss)
                     self.train_acc_history.append(train_acc)
                     self.val_acc_history.append(val_acc)
 
@@ -159,19 +172,19 @@ class Solver(object):
                         duration = time.time() - start_time
                         start_time = time.time()
 
-                        # get valid loss
-                        output = model(input_val_var)
-                        val_loss = self.loss_func(output, target_val_var)
-                        self.val_loss_history.append(val_loss)
-
                         # don't take the average in the first iteration
                         if epoch_end:
                             # include all losses from the current epoch
                             start_epoch = t - iter_per_epoch
                             average_train_loss = sum(self.loss_history[start_epoch:]) / iter_per_epoch
+                            self.train_loss_history.append(average_train_loss)
 
                             print_step_summary_and_update_best_values(self.epoch, average_train_loss, train_acc,
                                                                       val_loss, val_acc, duration)
+                        else:
+                            # then just take the last result
+                            self.train_loss_history.append(self.train_loss_history[-1])
+
 
                     # early stopping if no improvement of val_acc during the last self.early_stopping epochs
                     # https://link.springer.com/chapter/10.1007/978-3-642-35289-8_5
@@ -218,20 +231,44 @@ class Solver(object):
 
     def accuracy(self, model, sample, target, topk=(1,)):
         """Computes the precision@k for the specified values of k"""
-        maxk = max(topk)
-        batch_size = target.size(0)
-
+        target = target
         output = model(sample)
-        _, prediction = output.topk(maxk, 1, True, True)
-        prediction = prediction.t()
-        correct = prediction.eq(target.view(1, -1).expand_as(prediction))
+        _, predicted = torch.max(output, 1)
+        total = target.size(0)
+        correct = (predicted == target).sum()
+        return correct.data[0] / total
 
-        res = []
-        for k in topk:
-            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-            res.append(correct_k.mul_(100.0 / batch_size))
-        return res
+        # maxk = max(topk)
+        # batch_size = target.size(0)
+        #
+        # output = model(sample)
+        # _, prediction = output.topk(maxk, 1, True, True)
+        # prediction = prediction.t()
+        # correct = prediction.eq(target.view(1, -1).expand_as(prediction))
+        #
+        # res = []
+        # for k in topk:
+        #     correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+        #     res.append(correct_k.mul_(100.0 / batch_size))
+        # return res[0]
 
     def _save_checkpoint(self, filename='checkpoint.pth.tar'):
         torch.save(self.best_model_checkpoint, filename)
         shutil.copyfile(filename, DEFAULT_CHECKPOINT_PATH)
+
+# from dl4cv.data_utils import get_CIFAR10_datasets, OverfitSampler, rel_error
+#
+# train_data, val_data, test_data, mean_image = get_CIFAR10_datasets()
+# print("Train size: %i" % len(train_data))
+# print("Val size: %i" % len(val_data))
+# print("Test size: %i" % len(test_data))
+# from dl4cv.classifiers.classification_cnn import ClassificationCNN
+#
+# num_train = 100
+# train_loader = torch.utils.data.DataLoader(train_data, batch_size=50, shuffle=False, num_workers=4,
+#                                            sampler=OverfitSampler(num_train))
+# val_loader = torch.utils.data.DataLoader(val_data, batch_size=50, shuffle=False, num_workers=4)
+#
+# overfit_model = ClassificationCNN()
+# overfit_solver = Solver(optim_args={"lr": 1e-2})
+# overfit_solver.train(overfit_model, train_loader, val_loader, log_nth=1, num_epochs=10)
