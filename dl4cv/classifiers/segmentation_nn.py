@@ -1,6 +1,7 @@
 """SegmentationNN"""
 import torch
 import torch.nn as nn
+import torchvision.models as models
 
 
 class SegmentationNN(nn.Module):
@@ -17,57 +18,65 @@ class SegmentationNN(nn.Module):
         # input is N, C, H, W
         channels, height, width = input_dim
 
+        # get a pretrained vgg16 model
+        vgg16_model = models.__dict__['vgg16'](pretrained=True)
 
-        # Layer 1 Conf
-        # Padding => Same
-        conv_padding = (kernel_size - stride_conv) // 2
-        conv_out = (num_filters,
-                    (((width + 2 * conv_padding - kernel_size) // stride_conv) + 1),
-                    (((height + 2 * conv_padding - kernel_size) // stride_conv) + 1))
+        features = vgg16_model.features.children()
+        classifiers = vgg16_model.classifier.children()
 
-        # Layer 3 Pool
-        pool_out = (conv_out[0],
-                    ((conv_out[1] - pool) // stride_pool + 1),
-                    ((conv_out[2] - pool) // stride_pool + 1))
+        # take the conv layers of the vgg model and put it in a nn sequential
+        self.vgg_features = nn.Sequential(*features)
 
-        # Layer 4 Fully Connected
-        fc1_dim = ((pool_out[0] * pool_out[1] * pool_out[2]), hidden_dim)
+        # TODO: get the number of out channels of the last vgg layer
+        # use the fully connected layers as convolutional layers
+        fc1 = nn.Conv2d(in_channels=512,
+                        out_channels=4096,
+                        kernel_size=7,
+                        stride=1,
+                        padding=0,
+                        bias=True)
 
-        # Layer 7 Fully Connected
-        fc2_dim = (hidden_dim, num_classes)
+        fc2 = nn.Conv2d(in_channels=4096,
+                        out_channels=4096,
+                        kernel_size=1,
+                        stride=1,
+                        padding=0,
+                        bias=True)
 
-        print('Conv Pad ', conv_padding)
-        print('Conv Out ', conv_out)
-        print('Pool Out ', pool_out)
-        print('FC1 ', fc1_dim)
-        print('FC2 ', fc2_dim)
+        fc3 = nn.Conv2d(in_channels=4096,
+                        out_channels=num_classes,
+                        kernel_size=1,
+                        stride=1,
+                        padding=0,
+                        bias=True)
 
-        # conv - relu - 2x2 max pool - fc - dropout - relu - fc
-        self.features = nn.Sequential(
-            nn.Conv2d(
-                in_channels=channels,
-                out_channels=num_filters,
-                kernel_size=kernel_size,
-                stride=stride_conv,
-                padding=conv_padding,
-                bias=True),
+        # TODO: get the number of out channels of the last vgg layer
+        # Copy the data from the vgg16 net to the conv layers
+        fc1.weight.data._copy(classifiers[0].weight.data.view(4096, 512, 7, 7))
+        fc1.bias.data._copy(classifiers[0].bias.data)
+
+        fc2.weight.data._copy(classifiers[3].weight.data.view(4096, 4096, 1, 1))
+        fc2.bias.data._copy(classifiers[3].bias.data)
+
+        fc3.weight.data *= weight_scale
+
+        self.segmentation = nn.Sequential(
+            fc1,
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=pool, stride=stride_pool)
-        )
-
-        # initialize and scale layers
-        # get weights of first conv layer
-        conv_layer = self.features.children().__next__()
-        conv_layer.weight.data *= weight_scale
-
-        self.features_out = pool_out
-
-        self.classifier = nn.Sequential(
-            nn.Linear(in_features=fc1_dim[0], out_features=fc1_dim[1]),
             nn.Dropout(p=dropout),
+            fc2,
             nn.ReLU(inplace=True),
-            nn.Linear(in_features=fc2_dim[0], out_features=fc2_dim[1])
+            nn.Dropout(p=dropout),
+            fc3
         )
+
+        # perform the upsampling
+        self.upsampling = nn.ConvTranspose2d(in_channels=num_classes,
+                                        out_channels=num_classes,
+                                        kernel_size=64,
+                                        stride=32,
+                                        bias=False)
+
         ########################################################################
         #                             END OF YOUR CODE                         #
         ########################################################################
@@ -83,9 +92,13 @@ class SegmentationNN(nn.Module):
         ########################################################################
         #                             YOUR CODE                                #
         ########################################################################
-        x = self.features(x)
-        x = x.view(x.size(0), self.features_out[0] * self.features_out[1] * self.features_out[2])
-        x = self.classifier(x)
+        input_size = x.size()
+
+        x = self.vgg_features(x)
+        x = self.segmentation(x)
+        x = self.upsampling(x)
+
+        return x[:, :, 19: (19 + input_size[2]), 19: (19 + input_size[3])].contiguous()
         ########################################################################
         #                             END OF YOUR CODE                         #
         ########################################################################
