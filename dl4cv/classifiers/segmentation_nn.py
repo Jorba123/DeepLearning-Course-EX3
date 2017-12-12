@@ -21,8 +21,8 @@ class SegmentationNN(nn.Module):
         # get a pretrained vgg16 model
         vgg16_model = models.__dict__['vgg16'](pretrained=True)
 
-        features = vgg16_model.features.children()
-        classifiers = vgg16_model.classifier.children()
+        features = list(vgg16_model.features.children())
+        classifiers = list(vgg16_model.classifier.children())
 
         # take the conv layers of the vgg model and put it in a nn sequential
         self.vgg_features = nn.Sequential(*features)
@@ -52,11 +52,11 @@ class SegmentationNN(nn.Module):
 
         # TODO: get the number of out channels of the last vgg layer
         # Copy the data from the vgg16 net to the conv layers
-        fc1.weight.data._copy(classifiers[0].weight.data.view(4096, 512, 7, 7))
-        fc1.bias.data._copy(classifiers[0].bias.data)
+        fc1.weight.data.copy_(classifiers[0].weight.data.view(4096, 512, 7, 7))
+        fc1.bias.data.copy_(classifiers[0].bias.data)
 
-        fc2.weight.data._copy(classifiers[3].weight.data.view(4096, 4096, 1, 1))
-        fc2.bias.data._copy(classifiers[3].bias.data)
+        fc2.weight.data.copy_(classifiers[3].weight.data.view(4096, 4096, 1, 1))
+        fc2.bias.data.copy_(classifiers[3].bias.data)
 
         fc3.weight.data *= weight_scale
 
