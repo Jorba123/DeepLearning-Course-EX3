@@ -78,6 +78,8 @@ class Solver(object):
 
         # Compute loss and gradient
         output = model(input_var)
+
+        #target_var = target_var
         loss = self.loss_func(output, target_var)
 
         # preform training step
@@ -256,19 +258,25 @@ class Solver(object):
         torch.save(self.best_model_checkpoint, filename)
         shutil.copyfile(filename, DEFAULT_CHECKPOINT_PATH)
 
-# from dl4cv.data_utils import get_CIFAR10_datasets, OverfitSampler, rel_error
-#
-# train_data, val_data, test_data, mean_image = get_CIFAR10_datasets()
-# print("Train size: %i" % len(train_data))
-# print("Val size: %i" % len(val_data))
-# print("Test size: %i" % len(test_data))
-# from dl4cv.classifiers.classification_cnn import ClassificationCNN
-#
-# num_train = 100
-# train_loader = torch.utils.data.DataLoader(train_data, batch_size=50, shuffle=False, num_workers=4,
-#                                            sampler=OverfitSampler(num_train))
-# val_loader = torch.utils.data.DataLoader(val_data, batch_size=50, shuffle=False, num_workers=4)
-#
-# overfit_model = ClassificationCNN()
-# overfit_solver = Solver(optim_args={"lr": 1e-2})
-# overfit_solver.train(overfit_model, train_loader, val_loader, log_nth=1, num_epochs=10)
+from dl4cv.classifiers.segmentation_nn import SegmentationNN
+import torch.nn.functional as F
+from dl4cv.data_utils import OverfitSampler
+from dl4cv.data_utils import SegmentationData, label_img_to_rgb
+
+path_to_dataset = '/Users/felix/Documents/Repositories/TUM/DL4CV/03/DeepLearning-Course-EX3/datasets/segmentation_data/'
+train_data = SegmentationData(image_paths_file=path_to_dataset + 'train.txt')
+val_data = SegmentationData(image_paths_file=path_to_dataset + 'val.txt')
+test_data = SegmentationData(image_paths_file= '/Users/felix/Documents/Repositories/TUM/DL4CV/03/DeepLearning-Course-EX3/datasets/segmentation_data_test/test.txt')
+test_loader = torch.utils.data.DataLoader(test_data,
+                                          batch_size=1,
+                                          shuffle=False,
+                                          num_workers=1)
+
+train_loader = torch.utils.data.DataLoader(train_data, batch_size=50, shuffle=False, num_workers=4,
+                                           sampler=OverfitSampler(1))
+val_loader = torch.utils.data.DataLoader(val_data, batch_size=50, shuffle=False, num_workers=4)
+
+overfit_model = SegmentationNN()
+print(overfit_model)
+overfit_solver = Solver(optim_args={"lr": 1e-2}, loss_func=torch.nn.CrossEntropyLoss(ignore_index=-1))
+overfit_solver.train(overfit_model, train_loader, val_loader, log_nth=1, num_epochs=10)

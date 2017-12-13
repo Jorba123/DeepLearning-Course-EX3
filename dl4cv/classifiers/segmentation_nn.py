@@ -71,9 +71,12 @@ class SegmentationNN(nn.Module):
         )
 
         # perform the upsampling
+        # the output has to be 23x240x240
+        # output: (H_in - 1) * stride - 2 * padding + kernel size + output padding
+        # 22 * 32
         self.upsampling = nn.ConvTranspose2d(in_channels=num_classes,
                                         out_channels=num_classes,
-                                        kernel_size=64,
+                                        kernel_size=240,
                                         stride=32,
                                         bias=False)
 
@@ -98,7 +101,11 @@ class SegmentationNN(nn.Module):
         x = self.segmentation(x)
         x = self.upsampling(x)
 
-        return x[:, :, 19: (19 + input_size[2]), 19: (19 + input_size[3])].contiguous()
+        # change output to match targets
+        #values, indices = torch.max(x, 1)
+        #indices = indices.double()[0]
+
+        return x
         ########################################################################
         #                             END OF YOUR CODE                         #
         ########################################################################
