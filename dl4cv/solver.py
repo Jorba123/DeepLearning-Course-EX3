@@ -79,7 +79,6 @@ class Solver(object):
         # Compute loss and gradient
         output = model(input_var)
 
-        #target_var = target_var
         loss = self.loss_func(output, target_var)
 
         # preform training step
@@ -233,11 +232,14 @@ class Solver(object):
 
     def accuracy(self, model, sample, target, topk=(1,)):
         """Computes the precision@k for the specified values of k"""
-        target = target
         output = model(sample)
         _, predicted = torch.max(output, 1)
-        total = target.size(0)
-        correct = (predicted == target).sum()
+        total = model.num_samples(target)
+
+        # remove parts from the accuracy calculation that are -1 for the segmentation
+        target_mask = target > -1
+
+        correct = (predicted == target)[target_mask].sum()
         return correct.data[0] / total
 
         # maxk = max(topk)

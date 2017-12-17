@@ -112,6 +112,9 @@ class SegmentationNN(nn.Module):
 
         return x
 
+    def num_samples(self, target):
+        return target.size(0) * target.size(1) * target.size(2)
+
     @property
     def is_cuda(self):
         """

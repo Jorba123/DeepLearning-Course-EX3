@@ -134,6 +134,9 @@ class ClassificationCNN(nn.Module):
 
         return x
 
+    def num_samples(self, target):
+        return target.size(0)
+
     @property
     def is_cuda(self):
         """

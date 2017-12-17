@@ -190,7 +190,8 @@ def get_CIFAR10_datasets(num_training=48000, num_validation=1000,
     """
     Load and preprocess the CIFAR-10 dataset.
     """
-    path = '/Users/felix/Documents/Repositories/TUM/DL4CV/03/DeepLearning-Course-EX3/datasets/cifar10_train.p'
+    # path = '/Users/felix/Documents/Repositories/TUM/DL4CV/03/DeepLearning-Course-EX3/datasets/cifar10_train.p'
+    path = 'datasets/cifar10_train.p'
     with open(path, 'rb') as f:
         datadict = pickle.load(f, encoding='latin1')
         X = np.array(datadict['data'])
