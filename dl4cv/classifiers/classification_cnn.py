@@ -142,6 +142,7 @@ class ClassificationCNN(nn.Module):
         """
         Check if model parameters are allocated on the GPU.
         """
+        ##return False
         return next(self.parameters()).is_cuda
 
     def save(self, path):

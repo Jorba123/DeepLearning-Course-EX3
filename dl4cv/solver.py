@@ -37,6 +37,7 @@ class Solver(object):
         self.early_stopping = kwargs.pop('early_stopping', -1)
         self.print_every = kwargs.pop('print_every', 10)
         self.verbose = kwargs.pop('verbose', True)
+        self.should_use_cuda = kwargs.pop('should_use_cuda', True)
 
         self.epoch = 0
         self.best_val_acc = 0
@@ -79,6 +80,9 @@ class Solver(object):
         # Compute loss and gradient
         output = model(input_var)
 
+        # make sure targets are long
+        target_var = target_var.long()
+
         loss = self.loss_func(output, target_var)
 
         # preform training step
@@ -102,7 +106,7 @@ class Solver(object):
         self._reset_histories()
         iter_per_epoch = len(train_loader)
 
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and self.should_use_cuda:
             model.cuda()
 
         print('START TRAIN.')
@@ -132,10 +136,18 @@ class Solver(object):
             print('Epoch\tTrain Loss\tTrain accuracy\t\tTest Loss\tTest accuracy\tDuration')
             print('=====================================================================================================')
             start_time = time.time()
-
+        continue_training = True
         for epoch in range(num_epochs):
+            if not continue_training:
+                break
+
             for t, (input_var, target_var) in enumerate(train_loader, 1):
-                input_var, target_var = Variable(input_var), Variable(target_var)
+
+                if model.is_cuda:
+                    input_var, target_var = Variable(input_var.cuda()), Variable(target_var.cuda())
+                else:
+                    input_var, target_var = Variable(input_var), Variable(target_var)
+
                 self._step(model, input_var, target_var)
 
                 # At the end of every epoch, increment the epoch counter and decay the
@@ -155,11 +167,17 @@ class Solver(object):
                     avg_val_loss = []
                     avg_val_acc = []
                     for input_val_var, target_val_var in val_loader:
-                        input_val_var, target_val_var = Variable(input_val_var), Variable(target_val_var)
+
+                        if model.is_cuda:
+                            input_val_var, target_val_var = Variable(input_val_var.cuda()), Variable(target_val_var.cuda())
+                        else:
+                            input_val_var, target_val_var = Variable(input_val_var), Variable(target_val_var)
+
                         avg_val_acc.append(self.accuracy(model, input_val_var, target_val_var))
 
                         # get valid loss
                         output = model(input_val_var)
+                        target_val_var = target_val_var.long()
                         val_loss = self.loss_func(output, target_val_var).data[0]
                         avg_val_loss.append(val_loss)
 
@@ -216,6 +234,7 @@ class Solver(object):
                             # Restore best model
                             model.load_state_dict(self.best_model_checkpoint['state_dict'])
                             self.optim.load_state_dict(self.best_model_checkpoint['optimizer'])
+                            continue_training = False
                             break
 
         print('=====================================================================================================')
@@ -238,6 +257,7 @@ class Solver(object):
 
         # remove parts from the accuracy calculation that are -1 for the segmentation
         target_mask = target > -1
+        target = target.long()
 
         correct = (predicted == target)[target_mask].sum()
         return correct.data[0] / total
@@ -259,26 +279,3 @@ class Solver(object):
     def _save_checkpoint(self, filename='checkpoint.pth.tar'):
         torch.save(self.best_model_checkpoint, filename)
         shutil.copyfile(filename, DEFAULT_CHECKPOINT_PATH)
-
-from dl4cv.classifiers.segmentation_nn import SegmentationNN
-import torch.nn.functional as F
-from dl4cv.data_utils import OverfitSampler
-from dl4cv.data_utils import SegmentationData, label_img_to_rgb
-
-path_to_dataset = '/Users/felix/Documents/Repositories/TUM/DL4CV/03/DeepLearning-Course-EX3/datasets/segmentation_data/'
-train_data = SegmentationData(image_paths_file=path_to_dataset + 'train.txt')
-val_data = SegmentationData(image_paths_file=path_to_dataset + 'val.txt')
-test_data = SegmentationData(image_paths_file= '/Users/felix/Documents/Repositories/TUM/DL4CV/03/DeepLearning-Course-EX3/datasets/segmentation_data_test/test.txt')
-test_loader = torch.utils.data.DataLoader(test_data,
-                                          batch_size=1,
-                                          shuffle=False,
-                                          num_workers=1)
-
-train_loader = torch.utils.data.DataLoader(train_data, batch_size=50, shuffle=False, num_workers=4,
-                                           sampler=OverfitSampler(1))
-val_loader = torch.utils.data.DataLoader(val_data, batch_size=50, shuffle=False, num_workers=4)
-
-overfit_model = SegmentationNN()
-print(overfit_model)
-overfit_solver = Solver(optim_args={"lr": 1e-2}, loss_func=torch.nn.CrossEntropyLoss(ignore_index=-1))
-overfit_solver.train(overfit_model, train_loader, val_loader, log_nth=1, num_epochs=10)

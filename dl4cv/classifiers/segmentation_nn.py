@@ -120,7 +120,8 @@ class SegmentationNN(nn.Module):
         """
         Check if model parameters are allocated on the GPU.
         """
-        return next(self.parameters()).is_cuda
+        return False
+        #return next(self.parameters()).is_cuda
 
     def save(self, path):
         """
