@@ -249,18 +249,25 @@ class Solver(object):
         ########################################################################
         print('FINISH.')
 
-    def accuracy(self, model, sample, target, topk=(1,)):
+    def accuracy(self, model, inputs, targets, topk=(1,)):
         """Computes the precision@k for the specified values of k"""
-        output = model(sample)
-        _, predicted = torch.max(output, 1)
-        total = model.num_samples(target)
+        targets = targets.long()
+        outputs = model.forward(inputs)
+        _, preds = torch.max(outputs, 1)
+        targets_mask = targets >= 0
+        score = np.mean((preds == targets)[targets_mask].data.cpu().numpy())
+        return score
 
-        # remove parts from the accuracy calculation that are -1 for the segmentation
-        target_mask = target > -1
-        target = target.long()
-
-        correct = (predicted == target)[target_mask].sum()
-        return correct.data[0] / total
+        # output = model.forward(sample)
+        # _, predicted = torch.max(output, 1)
+        # total = model.num_samples(target)
+        #
+        # # remove parts from the accuracy calculation that are -1 for the segmentation
+        # target_mask = target > -1
+        # target = target.long()
+        #
+        # correct = (predicted == target)[target_mask].sum()
+        # return correct.data[0] / total
 
         # maxk = max(topk)
         # batch_size = target.size(0)
