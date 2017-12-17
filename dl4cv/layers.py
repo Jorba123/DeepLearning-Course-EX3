@@ -138,6 +138,49 @@ def max_pool_forward_naive(x, pool_param):
     # TODO: Implement the max pooling forward pass                              #
     #############################################################################
 
+    stride = pool_param['stride']
+    pool_w = pool_param['pool_width']
+    pool_h = pool_param['pool_height']
+
+    N, C, H, W = x.shape
+
+    h_out = 1 + (H - pool_h) // stride
+    w_out = 1 + (W - pool_w) // stride
+
+    # print('Stride: ', stride)
+    # print('Input size: ', x.shape)
+    # print('Pooling size W: ', pool_w)
+    # print('Pooling size h: ', pool_h)
+    # print('output dimensions: ', (N, C, h_out, w_out))
+
+    # out: Output data, of shape (N, F, H', W')
+    out = np.zeros((N, C, h_out, w_out))
+    maxIdx = np.zeros((N, C, H, W, 2))
+
+    # for each sample in X
+    for sample_idx in range(N):
+        sample = x[sample_idx]
+
+        # iterate over sample
+        for i in range(w_out):
+            # calculate with stride
+            pool_position_x = i * stride
+
+            for j in range(h_out):
+                pool_position_y = j * stride
+
+                # for every channel
+                for c in range(C):
+                    pooling_window = sample[c,
+                                            pool_position_y:pool_position_y + pool_h,
+                                            pool_position_x:pool_position_x + pool_w]
+                    out[sample_idx, c, j, i] = np.max(pooling_window)
+
+                    # calculate index map
+                    max_indices = np.argmax(pooling_window)
+                    maxIdx[sample_idx, c, pool_position_y, pool_position_x] = np.unravel_index(max_indices,
+                                                                                               pooling_window.shape)
+
     #############################################################################
     #                             END OF YOUR CODE                              #
     #############################################################################
@@ -353,10 +396,10 @@ def spatial_batchnorm_backward(dout, cache):
     return dx, dgamma, dbeta
 
 
-# import numpy as np
-# from dl4cv.gradient_check import (eval_numerical_gradient_array,
-#                                   eval_numerical_gradient,
-#                                   rel_error)
+import numpy as np
+from dl4cv.gradient_check import (eval_numerical_gradient_array,
+                                  eval_numerical_gradient,
+                                  rel_error)
 # x_shape = (2, 3, 4, 4)
 # w_shape = (3, 3, 4, 4)
 # x = np.linspace(-0.1, 0.5, num=np.prod(x_shape)).reshape(x_shape)
@@ -380,4 +423,26 @@ def spatial_batchnorm_backward(dout, cache):
 #
 # # Compare your output to ours; difference should be around 1e-8
 # print('Testing conv_forward_naive')
+# print('difference: ', rel_error(out, correct_out))
+# x_shape = (2, 3, 4, 4)
+# x = np.linspace(-0.3, 0.4, num=np.prod(x_shape)).reshape(x_shape)
+# pool_param = {'pool_width': 2, 'pool_height': 2, 'stride': 2}
+#
+# out, _ = max_pool_forward_naive(x, pool_param)
+#
+# correct_out = np.array([[[[-0.26315789, -0.24842105],
+#                           [-0.20421053, -0.18947368]],
+#                          [[-0.14526316, -0.13052632],
+#                           [-0.08631579, -0.07157895]],
+#                          [[-0.02736842, -0.01263158],
+#                           [ 0.03157895,  0.04631579]]],
+#                         [[[ 0.09052632,  0.10526316],
+#                           [ 0.14947368,  0.16421053]],
+#                          [[ 0.20842105,  0.22315789],
+#                           [ 0.26736842,  0.28210526]],
+#                          [[ 0.32631579,  0.34105263],
+#                           [ 0.38526316,  0.4       ]]]])
+#
+# # Compare your output with ours. Difference should be around 1e-8.
+# print('Testing max_pool_forward_naive function:')
 # print('difference: ', rel_error(out, correct_out))
