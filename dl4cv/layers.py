@@ -203,6 +203,39 @@ def max_pool_backward_naive(dout, cache):
     #############################################################################
     # TODO: Implement the max pooling backward pass                             #
     #############################################################################
+    x, maxIdx, pool_param = cache
+
+    stride = pool_param['stride']
+    pool_w = pool_param['pool_width']
+    pool_h = pool_param['pool_height']
+
+    N, C, H, W = x.shape
+
+    h_out = 1 + (H - pool_h) // stride
+    w_out = 1 + (W - pool_w) // stride
+
+    dx = np.zeros(x.shape)
+
+    # for each sample in X
+    for sample_idx in range(N):
+        sample = x[sample_idx]
+
+        # iterate over sample
+        for i in range(w_out):
+            # calculate with stride
+            pool_position_x = i * stride
+
+            for j in range(h_out):
+                pool_position_y = j * stride
+
+                # for every channel
+                for c in range(C):
+                    mc_y, mc_x = maxIdx[sample_idx, c, pool_position_y, pool_position_x]
+                    dx[sample_idx,
+                        c,
+                        pool_position_y + int(mc_y),
+                        pool_position_x + int(mc_x)] += dout[sample_idx, c, j, i]
+
 
     #############################################################################
     #                             END OF YOUR CODE                              #
@@ -446,3 +479,16 @@ from dl4cv.gradient_check import (eval_numerical_gradient_array,
 # # Compare your output with ours. Difference should be around 1e-8.
 # print('Testing max_pool_forward_naive function:')
 # print('difference: ', rel_error(out, correct_out))
+#
+# x = np.random.randn(3, 2, 8, 8)
+# dout = np.random.randn(3, 2, 4, 4)
+# pool_param = {'pool_height': 2, 'pool_width': 2, 'stride': 2}
+#
+# dx_num = eval_numerical_gradient_array(lambda x: max_pool_forward_naive(x, pool_param)[0], x, dout)
+#
+# out, cache = max_pool_forward_naive(x, pool_param)
+# dx = max_pool_backward_naive(dout, cache)
+#
+# # Your error should be around 1e-12
+# print('Testing max_pool_backward_naive function:')
+# print('dx error: ', rel_error(dx, dx_num))
